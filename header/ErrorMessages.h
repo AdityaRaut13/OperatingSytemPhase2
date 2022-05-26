@@ -1,11 +1,14 @@
 #pragma once
-enum
-{
-	NoError,
-	outOfData,
-	lineLimitExceeded,
-	timeLimitExceeded,
-	operationCodeError,
-	operandError,
-	invalidPageFault
-};
+namespace Error {
+	enum
+	{
+		noError,
+		outOfData,
+		lineLimitExceeded,
+		timeLimitExceeded,
+		operationCodeError,
+		operandError,
+		invalidPageFault
+	};
+
+}

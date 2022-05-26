@@ -1,5 +1,6 @@
 #pragma once
 #define TIME_LIMIT_EXCEEDED 2
+
 enum SourceInterrupt
 {
 	getInput = 1,
