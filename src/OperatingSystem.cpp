@@ -1,4 +1,5 @@
 #include "OperatingSystem.h"
+#include "CPU.h"
 #include "ErrorMessages.h"
 #include "Interrupt.h"
 #include <fstream>
@@ -8,7 +9,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string.h>
-#include <vcruntime_string.h>
+#include <string>
 OperatingSystem::OperatingSystem(std::string outputFilePath)
 {
 	CPU();
@@ -18,11 +19,10 @@ OperatingSystem::OperatingSystem(std::string outputFilePath)
 	this->programInterrupt = 0;
 	this->outputFilePath = outputFilePath;
 	memset(memory, '$', 300 * sizeof(Word));
-	this->errorVector.resize(8);
 }
 
 
-void OperatingSystem::load(std::string &inputFilePath)
+void OperatingSystem::load(std::string inputFilePath)
 {
 	inputFile.open(inputFilePath);
 	// i need to switch based on the SI,TI,PI
@@ -31,13 +31,15 @@ void OperatingSystem::load(std::string &inputFilePath)
 	{
 		if(line.substr(0, 4).compare("$AMJ") == 0)
 		{
+			std::cout << "inside the if\n";
 			currentRunning.id = std::stoi(line.substr(4, 4));
 			currentRunning.timeLimit = std::stoi(line.substr(8, 4));
 			currentRunning.lineLimit = std::stoi(line.substr(12, 4));
 			// This is for the allocating the page table
 			currentRunning.pageTableBlockPointer = allocate();
 			// saving the allocated program card address into the page table
-			std::string buffer = saveToBuffer(inputFile, true);
+			std::string buffer = saveToBuffer(true);
+			std::cout << buffer << "\n";
 			// this is saving the program in buffer
 			while(buffer.length() != 0)
 			{
@@ -47,16 +49,18 @@ void OperatingSystem::load(std::string &inputFilePath)
 				uint8_t pageTableAddress = currentRunning.pageTableBlockPointer * BLOCK_SIZE +
 				                           currentRunning.pageTableWordPointer;
 				currentRunning.pageTableWordPointer++;
-				memory[pageTableAddress].set('$', '$', blockPointerString.at(0), blockPointerString.at(1));
+				memory[pageTableAddress].set('$', '$',
+				                             blockPointerString.length() == 1 ? '0' : blockPointerString.at(0),
+				                             blockPointerString.length() == 1 ? blockPointerString.at(0) : blockPointerString.at(1));
 				int length = copyFromBuffer(buffer, programCardAddress);
 				// copying the buffer into the memory
-				buffer = buffer.substr(length - 1);
+				buffer = buffer.substr(length );
 			}
 			// start the execution
 			std::getline(inputFile, line); // for taking the $dta from the file
 			this->startExecution();
 			// this is for control card
-			// and next it will be the program card
+			// and next it will be the program car\n\n\nd
 		}
 	}
 	inputFile.close();
@@ -65,17 +69,22 @@ void OperatingSystem::load(std::string &inputFilePath)
 uint8_t OperatingSystem::allocate()
 {
 	int blockNumber = std::rand() % NO_OF_BLOCKS;
-	while(strncmp((const char *)&memory[blockNumber], "$$$$", WORD_SIZE) == 0)
+	while(memory[blockNumber * BLOCK_SIZE].compare("$$$$") == 0)
 		blockNumber = std::rand() % NO_OF_BLOCKS;
 	return blockNumber;
 }
 
-std::string OperatingSystem::saveToBuffer(std::fstream &inputFile, bool programCard)
+std::string OperatingSystem::saveToBuffer( bool programCard)
 {
 	std::string buffer;
 	char end = programCard ? '$' : '\n';
 	while(inputFile.peek() != end)
-		buffer += inputFile.get();
+	{
+		if(inputFile.peek() == '\n')
+			inputFile.get();
+		else
+			buffer += inputFile.get();
+	}
 	if(!programCard)
 		buffer += inputFile.get();
 	return buffer;
@@ -114,7 +123,7 @@ int OperatingSystem::map(uint8_t virtualAddress)
 		return -1;
 	}
 	int blockAddress = std::stoi(strBlockPointer.substr(2, 2));
-	return blockAddress + virtualAddress % BLOCK_SIZE;
+	return blockAddress * BLOCK_SIZE + virtualAddress % BLOCK_SIZE;
 }
 int OperatingSystem::map(std::string virtualAddressStr)
 {
@@ -168,7 +177,7 @@ void OperatingSystem::startExecution(void)
 		if(instruction.substr(0, 2).compare("LR") == 0)
 			generalRegister = memory[realAddress];
 		else if (instruction.substr(0, 2).compare("SR") == 0)
-			generalRegister = memory[realAddress];
+			memory[realAddress] = generalRegister;
 		else if (instruction.substr(0, 2).compare("GD") == 0)
 		{
 			if(virtualAddress % 10 != 0)
@@ -202,9 +211,15 @@ void OperatingSystem::startExecution(void)
 void OperatingSystem::masterModeForInterrupt(int realAddress, int virtualAddress)
 {
 	if(timeInterrupt == 0 and sourceInterrupt == SourceInterrupt::getInput)
+	{
 		read(realAddress);
+		sourceInterrupt = 0;
+	}
 	else if (timeInterrupt == 0 and sourceInterrupt == SourceInterrupt::putData)
+	{
 		write(realAddress);
+		sourceInterrupt = 0;
+	}
 	else if(sourceInterrupt == SourceInterrupt::halt )
 	{
 		errorVector.push_back(Error::noError);
@@ -218,8 +233,10 @@ void OperatingSystem::masterModeForInterrupt(int realAddress, int virtualAddress
 	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and sourceInterrupt == SourceInterrupt::putData)
 	{
 		write(realAddress);
+		sourceInterrupt = 0;
 		errorVector.push_back(Error::timeLimitExceeded);
 	}
+	sourceInterrupt = 0;
 	// checking the time Interrupt and the program Interrupt
 	if(timeInterrupt == 0 and programInterrupt == ProgramInterrupt::operationError)
 	{
@@ -265,6 +282,7 @@ void OperatingSystem::masterModeForInterrupt(int realAddress, int virtualAddress
 		errorVector.push_back(Error::timeLimitExceeded);
 		terminate();
 	}
+	programInterrupt = 0;
 }
 
 void OperatingSystem::write(uint16_t realAddress)
@@ -288,16 +306,19 @@ void OperatingSystem::write(uint16_t realAddress)
 
 void OperatingSystem::read(uint16_t realAddress)
 {
-	std::string line = saveToBuffer(inputFile, false);
+	std::cout << "inside read \n";
+	std::string line = saveToBuffer(false);
+	std::cout << line << "\n";
 	if(line.compare("$END") or line.empty())
 	{
 		errorVector.push_back(Error::outOfData);
 		terminate();
 	}
-	for(int i = 0; i < BLOCK_SIZE; i++)
+	uint16_t index = 0;
+	while(index < WORD_SIZE * BLOCK_SIZE and index < line.length())
 	{
-		memory[realAddress + i] = line.substr(0, 4);
-		line = line.substr(4);
+		memory[realAddress + index / WORD_SIZE].word[index % WORD_SIZE] = line.at(index);
+		index++;
 	}
 }
 
@@ -351,4 +372,11 @@ void OperatingSystem::terminate(void)
 	outputFile.close();
 }
 
+
+void OperatingSystem::displayMemory(void)
+{
+	for(int i = 0; i < NO_OF_BLOCKS * BLOCK_SIZE; i++)
+		std::cout << i << " " << memory[i].toString() << "\n";
+	std::cout << "\n";
+}
 

@@ -1,7 +1,7 @@
 #pragma once
 #include <inttypes.h>
 #include <string>
-#include <vcruntime_string.h>
+#include <string.h>
 #define WORD_SIZE 4
 struct Word
 {
@@ -12,6 +12,7 @@ struct Word
 	void set(char a, char b, char c, char d);
 	std::string toString(void);
 	bool compare(Word other);
+	bool compare(std::string const &str);
 };
 class CPU {
 	public :

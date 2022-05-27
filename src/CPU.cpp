@@ -14,6 +14,13 @@ std::string Word::toString(void)
 	result += word[3];
 	return result;
 }
+bool Word::compare(std::string const &str)
+{
+	for(int i = 0; i < WORD_SIZE; i++)
+		if(word[i] != str.at(i))
+			return false;
+	return true;
+}
 
 
 

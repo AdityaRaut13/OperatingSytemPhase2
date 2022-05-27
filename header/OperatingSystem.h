@@ -32,12 +32,13 @@ class OperatingSystem : private CPU {
 		int map(uint8_t virtualAddress);
 		int map(std::string virtualAddressStr);
 		void masterModeForInterrupt(int realAddress, int virtualAddress);
-		std::string saveToBuffer(std::fstream &inputFile, bool programCard);
+		std::string saveToBuffer(bool programCard);
 		uint8_t copyFromBuffer(std::string &buffer, uint8_t blockPointer);
 		void fatal(std::string const &message );
+		void displayMemory(void);
 	public:
 		OperatingSystem(std::string outputFilePath);
-		void load(std::string &inputFilePath);
+		void load(std::string inputFilePath);
 		static bool isNumber(std::string str);
 };
 
