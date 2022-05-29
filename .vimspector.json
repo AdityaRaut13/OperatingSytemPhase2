@@ -1,0 +1,21 @@
+{
+  "configurations": {
+    "Launch": {
+      "adapter": "vscode-cpptools",
+      "configuration": {
+        "type":    "cppdbg",
+        "request": "launch",
+        "program": "${workspaceRoot}/OperatingSystem",
+        "cwd": "${workspaceRoot}",
+        "externalConsole": true,
+		"MIMode":"gdb",
+        "stopAtEntry": true,
+		"stopOnEntry":true,
+		"debugOptions":[],
+        "logging": {
+          "engineLogging": true
+        }
+      }
+    }
+  }
+}

@@ -69,7 +69,7 @@ void OperatingSystem::load(std::string inputFilePath)
 uint8_t OperatingSystem::allocate()
 {
 	int blockNumber = std::rand() % NO_OF_BLOCKS;
-	while(memory[blockNumber * BLOCK_SIZE].compare("$$$$") == 0)
+	while(memory[blockNumber * BLOCK_SIZE].compare("$$$$") == false)
 		blockNumber = std::rand() % NO_OF_BLOCKS;
 	return blockNumber;
 }
@@ -154,7 +154,6 @@ void OperatingSystem::startExecution(void)
 	instructionCounter = 0;
 	while(true)
 	{
-		//
 		int realAddress = this->map(instructionCounter);
 		if(programInterrupt != 0)
 		{
@@ -167,7 +166,9 @@ void OperatingSystem::startExecution(void)
 		instructionCounter++;
 		std::string instruction = instructionRegister.toString();
 		realAddress = map(instruction.substr(2, 2));
-		int virtualAddress = std::stoi(instruction.substr(2, 2));
+		int virtualAddress = isNumber(instruction.substr(2, 2))
+		                     ? std::stoi(instruction.substr(2, 2))
+		                     : 0 ;
 		if(programInterrupt != 0)
 		{
 			mode = KERNEL_MODE;
@@ -201,7 +202,7 @@ void OperatingSystem::startExecution(void)
 		if(programInterrupt != 0 or sourceInterrupt != 0 or timeInterrupt != 0)
 		{
 			mode = KERNEL_MODE;
-			this->masterModeForInterrupt(realAddress, std::stoi(instruction.substr(2, 2)));
+			this->masterModeForInterrupt(realAddress, virtualAddress);
 			mode = SLAVE_MODE;
 		}
 	}
@@ -257,7 +258,9 @@ void OperatingSystem::masterModeForInterrupt(int realAddress, int virtualAddress
 			int pageTableEntry = currentRunning.pageTableBlockPointer * BLOCK_SIZE +
 			                     virtualAddress / BLOCK_SIZE;
 			std::string blockPointerString = std::to_string(blockPointer);
-			memory[pageTableEntry].set('$', '$', blockPointerString.at(0), blockPointerString.at(1));
+			memory[pageTableEntry].set('$', '$',
+			                           blockPointerString.length() == 1 ? '0' : blockPointerString.at(0),
+			                           blockPointerString.length() == 1 ? blockPointerString.at(0) : blockPointerString.at(1));
 		}
 		else
 		{
@@ -297,8 +300,13 @@ void OperatingSystem::write(uint16_t realAddress)
 	outputFile.open(outputFilePath, std::ios_base::app);
 	if(!outputFile.is_open())
 		fatal("Can't Open output file");
-	for(int i = 0; i < BLOCK_SIZE; i++)
-		outputFile << memory[realAddress + i].toString();
+	int index = 0;
+	while(memory[realAddress + index / WORD_SIZE].word[index % WORD_SIZE] != '\n')
+	{
+		outputFile.put(memory[realAddress + index / WORD_SIZE].word[index % WORD_SIZE]);
+		index++;
+	}
+	outputFile << "\n";
 	outputFile.close();
 }
 
@@ -306,10 +314,8 @@ void OperatingSystem::write(uint16_t realAddress)
 
 void OperatingSystem::read(uint16_t realAddress)
 {
-	std::cout << "inside read \n";
 	std::string line = saveToBuffer(false);
-	std::cout << line << "\n";
-	if(line.compare("$END") or line.empty())
+	if(line.substr(0, 4).compare("$END") == 0 or line.empty())
 	{
 		errorVector.push_back(Error::outOfData);
 		terminate();
@@ -370,6 +376,8 @@ void OperatingSystem::terminate(void)
 		}
 	}
 	outputFile.close();
+	inputFile.close();
+	exit(1);
 }
 
 

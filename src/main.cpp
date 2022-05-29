@@ -4,6 +4,6 @@
 
 int main()
 {
-	OperatingSystem os("D:\\Aditya\\Documents\\Sem6\\system software\\OperatingSytemPhase2\\output.txt");
-	os.load("D:\\Aditya\\Documents\\Sem6\\system software\\OperatingSytemPhase2\\input.txt");
+	OperatingSystem os("/home/interloper/Documents/academic/sem6/SystemSoft/CourseProject/output.txt");
+	os.load("/home/interloper/Documents/academic/sem6/SystemSoft/CourseProject/input.txt");
 }
