@@ -1,7 +1,7 @@
 #pragma once
 #define TIME_LIMIT_EXCEEDED 2
 
-enum SourceInterrupt
+enum SupervisiorInterrupt
 {
 	getInput = 1,
 	putData,

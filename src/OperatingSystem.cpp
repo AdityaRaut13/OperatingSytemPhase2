@@ -14,7 +14,7 @@ OperatingSystem::OperatingSystem(std::string outputFilePath)
 {
 	CPU();
 	this->mode = SLAVE_MODE;
-	this->sourceInterrupt = 0;
+	this->supervisorInterrupt = 0;
 	this->timeInterrupt = 0;
 	this->programInterrupt = 0;
 	this->outputFilePath = outputFilePath;
@@ -57,6 +57,7 @@ void OperatingSystem::load(std::string inputFilePath)
 				buffer = buffer.substr(length );
 			}
 			// start the execution
+			std::cout << "before execution\n";
 			std::getline(inputFile, line); // for taking the $dta from the file
 			this->startExecution();
 			// this is for control card
@@ -154,6 +155,8 @@ void OperatingSystem::startExecution(void)
 	instructionCounter = 0;
 	while(true)
 	{
+		std::cout << "inside the start execution\n";
+		std::cout << instructionCounter << "\n";
 		int realAddress = this->map(instructionCounter);
 		if(programInterrupt != 0)
 		{
@@ -165,6 +168,7 @@ void OperatingSystem::startExecution(void)
 		instructionRegister = memory[realAddress];
 		instructionCounter++;
 		std::string instruction = instructionRegister.toString();
+		std::cout << instruction << "\n";
 		realAddress = map(instruction.substr(2, 2));
 		int virtualAddress = isNumber(instruction.substr(2, 2))
 		                     ? std::stoi(instruction.substr(2, 2))
@@ -178,28 +182,31 @@ void OperatingSystem::startExecution(void)
 		if(instruction.substr(0, 2).compare("LR") == 0)
 			generalRegister = memory[realAddress];
 		else if (instruction.substr(0, 2).compare("SR") == 0)
+		{
+			realAddress = map(virtualAddress);
 			memory[realAddress] = generalRegister;
+		}
 		else if (instruction.substr(0, 2).compare("GD") == 0)
 		{
 			if(virtualAddress % 10 != 0)
 				fatal("GD Must have block address");
-			sourceInterrupt = SourceInterrupt::getInput;
+			supervisorInterrupt = SupervisiorInterrupt::getInput;
 			realAddress = map(instruction.substr(2, 2));
 		}
 		else if (instruction.substr(0, 2).compare("PD") == 0)
-			sourceInterrupt = SourceInterrupt::putData;
+			supervisorInterrupt = SupervisiorInterrupt::putData;
 		else if (instruction.substr(0, 2).compare("CR") == 0)
 			toggleRegister = generalRegister.compare(memory[realAddress]);
 		else if (instruction.substr(0, 2).compare("BT") == 0)
 			instructionCounter = toggleRegister == true ? std::stoi(instruction.substr(2, 2)) : instructionCounter;
 		else if (instruction[0] == 'H')
-			sourceInterrupt = SourceInterrupt::halt;
+			supervisorInterrupt = SupervisiorInterrupt::halt;
 		else
 			programInterrupt = ProgramInterrupt::operationError;
 		currentRunning.timeCounter++;
 		if(currentRunning.timeLimit == currentRunning.timeCounter)
 			timeInterrupt = TIME_LIMIT_EXCEEDED;
-		if(programInterrupt != 0 or sourceInterrupt != 0 or timeInterrupt != 0)
+		if(programInterrupt != 0 or supervisorInterrupt != 0 or timeInterrupt != 0)
 		{
 			mode = KERNEL_MODE;
 			this->masterModeForInterrupt(realAddress, virtualAddress);
@@ -211,33 +218,33 @@ void OperatingSystem::startExecution(void)
 
 void OperatingSystem::masterModeForInterrupt(int realAddress, int virtualAddress)
 {
-	if(timeInterrupt == 0 and sourceInterrupt == SourceInterrupt::getInput)
+	if(timeInterrupt == 0 and supervisorInterrupt == SupervisiorInterrupt::getInput)
 	{
 		read(realAddress);
-		sourceInterrupt = 0;
+		supervisorInterrupt = 0;
 	}
-	else if (timeInterrupt == 0 and sourceInterrupt == SourceInterrupt::putData)
+	else if (timeInterrupt == 0 and supervisorInterrupt == SupervisiorInterrupt::putData)
 	{
 		write(realAddress);
-		sourceInterrupt = 0;
+		supervisorInterrupt = 0;
 	}
-	else if(sourceInterrupt == SourceInterrupt::halt )
+	else if(supervisorInterrupt == SupervisiorInterrupt::halt )
 	{
 		errorVector.push_back(Error::noError);
 		terminate();
 	}
-	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and sourceInterrupt == SourceInterrupt::getInput)
+	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and supervisorInterrupt == SupervisiorInterrupt::getInput)
 	{
 		errorVector.push_back(Error::timeLimitExceeded);
 		terminate();
 	}
-	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and sourceInterrupt == SourceInterrupt::putData)
+	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and supervisorInterrupt == SupervisiorInterrupt::putData)
 	{
 		write(realAddress);
-		sourceInterrupt = 0;
+		supervisorInterrupt = 0;
 		errorVector.push_back(Error::timeLimitExceeded);
 	}
-	sourceInterrupt = 0;
+	supervisorInterrupt = 0;
 	// checking the time Interrupt and the program Interrupt
 	if(timeInterrupt == 0 and programInterrupt == ProgramInterrupt::operationError)
 	{
@@ -251,7 +258,9 @@ void OperatingSystem::masterModeForInterrupt(int realAddress, int virtualAddress
 	}
 	else if (timeInterrupt == 0 and programInterrupt == ProgramInterrupt::pageFault)
 	{
-		if(instructionRegister.toString().substr(0, 2).compare("GD") == 0)
+		if(instructionRegister.toString().substr(0, 2).compare("GD") == 0
+		        or instructionRegister.toString().substr(0, 2).compare("SR") == 0
+		  )
 		{
 			// valid page fault
 			int blockPointer = allocate();
@@ -268,24 +277,30 @@ void OperatingSystem::masterModeForInterrupt(int realAddress, int virtualAddress
 			terminate();
 		}
 	}
-	else if (timeInterrupt == 1 and programInterrupt == ProgramInterrupt::operationError)
+	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and programInterrupt == ProgramInterrupt::operationError)
 	{
 		errorVector.push_back(Error::operationCodeError);
 		errorVector.push_back(Error::timeLimitExceeded);
 		terminate();
 	}
-	else if (timeInterrupt == 1 and programInterrupt == ProgramInterrupt::operandError)
+	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and programInterrupt == ProgramInterrupt::operandError)
 	{
 		errorVector.push_back(Error::operandError);
 		errorVector.push_back(Error::timeLimitExceeded);
 		terminate();
 	}
-	else if (timeInterrupt == 1 and programInterrupt == ProgramInterrupt::pageFault)
+	else if (timeInterrupt == TIME_LIMIT_EXCEEDED and programInterrupt == ProgramInterrupt::pageFault)
 	{
 		errorVector.push_back(Error::timeLimitExceeded);
 		terminate();
 	}
 	programInterrupt = 0;
+	if(timeInterrupt == TIME_LIMIT_EXCEEDED)
+	{
+		errorVector.push_back(Error::timeLimitExceeded);
+		terminate();
+	}
+	timeInterrupt = 0;
 }
 
 void OperatingSystem::write(uint16_t realAddress)
@@ -301,7 +316,7 @@ void OperatingSystem::write(uint16_t realAddress)
 	if(!outputFile.is_open())
 		fatal("Can't Open output file");
 	int index = 0;
-	while(memory[realAddress + index / WORD_SIZE].word[index % WORD_SIZE] != '\n')
+	while(memory[realAddress + index / WORD_SIZE].word[index % WORD_SIZE] != '\n' and index < BLOCK_SIZE * WORD_SIZE)
 	{
 		outputFile.put(memory[realAddress + index / WORD_SIZE].word[index % WORD_SIZE]);
 		index++;
@@ -375,6 +390,7 @@ void OperatingSystem::terminate(void)
 				}
 		}
 	}
+	outputFile << "Process ID :" << static_cast<int>(currentRunning.id ) << "\n";
 	outputFile.close();
 	inputFile.close();
 	exit(1);

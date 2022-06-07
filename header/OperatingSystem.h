@@ -18,7 +18,7 @@ class OperatingSystem : private CPU {
 		bool mode;
 		Process currentRunning;
 		Word memory[300];
-		uint8_t sourceInterrupt;
+		uint8_t supervisorInterrupt;
 		uint8_t programInterrupt;
 		uint8_t timeInterrupt;
 		std::string outputFilePath;
